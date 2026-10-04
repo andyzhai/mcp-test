@@ -14,12 +14,6 @@ for testing ChatGPT access to a local file over a remote HTTPS tunnel.
 npm install
 ```
 
-## Build
-
-```bash
-npm run build
-```
-
 ## Run
 
 ### Directly (TypeScript)
@@ -41,36 +35,46 @@ npm start
 |----------|---------|----------------------------|
 | `PORT`   | `3000`  | Port the HTTP server binds |
 
+## Test
+
+```bash
+npm test
+```
+
+This runs the bundled test client (`test-client.ts`) against the server.
+
 ## Connecting via a Remote HTTPS Tunnel
 
-The server uses SSE (Server-Sent Events) over HTTP, which is the standard MCP
-remote transport. Expose it to ChatGPT through any HTTPS tunnel that preserves
-HTTP headers and supports long-lived connections (SSE).
+The server uses **Streamable HTTP** transport (the modern MCP remote
+transport) at `GET/POST /mcp`. It is stateless — no SSE streaming or
+session IDs — which means it passes cleanly through HTTPS tunnel
+providers that buffer or terminate long-lived streams.
 
-### Option A — Cloudflare Tunnel (free, no account limits)
+1. Start the server:
 
-```bash
-cloudflared tunnel --url http://localhost:3000
-```
+   ```bash
+   npx tsx src/server.ts
+   ```
 
-Cloudflare assigns a public `https://<subdomain>.trycloudflare.com` URL. Use that
-as the MCP server URL in ChatGPT.
+2. Expose it through a tunnel of your choice:
 
-### Option B — ngrok (free tier)
+   ```bash
+   # Cloudflare Tunnel (free)
+   cloudflared tunnel --url http://localhost:3000
 
-```bash
-ngrok http 3000
-```
+   # ngrok (free tier)
+   ngrok http 3000
+   ```
 
-ngrok provides a public `https://<subdomain>.ngrok-free.app` URL. Use that as
-the MCP server URL in ChatGPT.
+3. Use the tunnel's HTTPS URL (e.g. `https://…trycloudflare.com/mcp`)
+   as the MCP server URL in ChatGPT.
 
 ## MCP Endpoints
 
-| Method | Path       | Purpose                                         |
-|--------|------------|-------------------------------------------------|
-| `GET`  | `/sse`     | Establish SSE stream; server returns endpoint   |
-| `POST` | `/message` | Send JSON-RPC requests (with `?sessionId=ID`)   |
+| Method | Path  | Purpose                                      |
+|--------|-------|----------------------------------------------|
+| `GET`  | `/mcp`| Not supported (returns 405); clients fall back to POST |
+| `POST` | `/mcp`| Send JSON-RPC requests (stateless)           |
 
 ## Tools
 
@@ -83,15 +87,19 @@ Reads the `hello.txt` file in the project root and returns its text content.
 **Example response:**
 
 ```json
-[
-  {
-    "type": "text",
-    "text": "Hello, MCP World!"
-  }
-]
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "Hello, MCP World!"
+    }
+  ]
+}
 ```
 
 ## Security
 
-This server is intentionally minimal and **read-only**. It exposes no write,
-delete, or command-execution capabilities. Only `hello.txt` can be read.
+This server is intentionally minimal and **read-only**. It exposes only
+the `read_test_file` tool — no write, delete, or command-execution
+capabilities. The file read is restricted to `hello.txt` in the project
+root.
